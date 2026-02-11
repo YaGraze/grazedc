@@ -17,45 +17,71 @@ from discord import app_commands
 from dotenv import load_dotenv
 
 # ------------------------------------------------------------------------------
-# БЛОК АВТО-УСТАНОВКИ FFMPEG
+# БЛОК АВТО-УСТАНОВКИ FFMPEG (УМНАЯ ВЕРСИЯ)
 # ------------------------------------------------------------------------------
+FFMPEG_PATH = "ffmpeg" # По умолчанию пробуем системный
+
 def install_ffmpeg():
-    if os.path.exists("./ffmpeg"):
-        return # Уже установлен
+    global FFMPEG_PATH
+    
+    # 1. Проверяем, есть ли уже локальный файл
+    if os.path.isfile("./ffmpeg"):
+        print("✅ Найден локальный FFmpeg.")
+        FFMPEG_PATH = "./ffmpeg"
+        return
 
     print("------------------------------------------------")
-    print("⏳ FFmpeg не найден. Начинаю автоматическую загрузку...")
-    print("⚠️ Это займет около 1 минуты. Не выключайте сервер!")
+    print("⏳ FFmpeg не найден. Начинаю загрузку...")
     
     url = "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
     filename = "ffmpeg.tar.xz"
 
     try:
-        # 1. Скачивание
+        # Скачиваем
         urllib.request.urlretrieve(url, filename)
         print("✅ Архив скачан. Распаковка...")
 
-        # 2. Распаковка
+        # Распаковываем
         with tarfile.open(filename) as f:
             f.extractall(".")
         
-        # 3. Поиск файла внутри папок и перемещение в корень
-        extracted_folder = [name for name in os.listdir(".") if name.startswith("ffmpeg-") and os.path.isdir(name)][0]
-        shutil.move(f"{extracted_folder}/ffmpeg", "./ffmpeg")
+        # Ищем файл ffmpeg во всех папках (рекурсивно)
+        found_path = None
+        for root, dirs, files in os.walk("."):
+            if "ffmpeg" in files:
+                full_path = os.path.join(root, "ffmpeg")
+                # Проверяем, что это не папка и не архив
+                if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
+                    continue # Если уже исполняемый, берем
+                
+                # Перемещаем в корень
+                try:
+                    shutil.move(full_path, "./ffmpeg")
+                    found_path = "./ffmpeg"
+                    break
+                except Exception:
+                    pass
         
-        # 4. Выдача прав на запуск
-        os.chmod("./ffmpeg", 0o755)
+        # Чистим мусор
+        if os.path.exists(filename):
+            os.remove(filename)
         
-        # 5. Очистка мусора
-        os.remove(filename)
-        shutil.rmtree(extracted_folder)
-        
-        print("🎉 FFmpeg успешно установлен и готов к работе!")
+        # Удаляем папки, оставшиеся от распаковки (начинаются на ffmpeg-)
+        for item in os.listdir("."):
+            if os.path.isdir(item) and item.startswith("ffmpeg-") and item != "ffmpeg":
+                shutil.rmtree(item)
+
+        if found_path:
+            os.chmod("./ffmpeg", 0o755) # Даем права
+            FFMPEG_PATH = "./ffmpeg"
+            print("🎉 FFmpeg успешно установлен в ./ffmpeg")
+        else:
+            print("⚠️ Не удалось переместить FFmpeg, попробуем использовать системный.")
+
     except Exception as e:
         print(f"❌ Ошибка установки FFmpeg: {e}")
-        print("Попробуйте перезапустить сервер.")
 
-# ЗАПУСК УСТАНОВКИ ПЕРЕД ВСЕМ ОСТАЛЬНЫМ
+# ЗАПУСКАЕМ УСТАНОВКУ
 install_ffmpeg()
 
 # ------------------------------------------------------------------------------
