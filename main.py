@@ -27,9 +27,9 @@ class MyBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Добавляем View навигации, чтобы кнопки работали после перезагрузки
+        # ВАЖНО: Добавляем View с тем же классом, что используется в коде.
+        # Это позволяет меню работать после перезагрузки.
         self.add_view(NavigationView())
-        # Синхронизируем команды с серверами
         await self.tree.sync()
 
     async def on_ready(self):
@@ -53,7 +53,13 @@ class NavigationSelect(discord.ui.Select):
             discord.SelectOption(label="Музыка", description="Музыкальный бот и Lofi", emoji="🎵", value="music"),
             discord.SelectOption(label="Команды", description="Список команд", emoji="💻", value="commands"),
         ]
-        super().__init__(placeholder="Выберите нужное", min_values=1, max_values=1, options=options)
+        super().__init__(
+            placeholder="Выберите нужное", 
+            min_values=1, 
+            max_values=1, 
+            options=options, 
+            custom_id="navigation_menu"
+        )
 
     async def callback(self, interaction: discord.Interaction):
         choice = self.values[0]
