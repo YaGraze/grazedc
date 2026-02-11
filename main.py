@@ -132,11 +132,11 @@ async def navigation(interaction: discord.Interaction):
             "ролями, и где их получить, а также узнать об основных каналах.\n\n"
             "Для ознакомления с сервером нажми **\"Выберите нужное\"**"
         ),
-        color=0xE67E22
+        color=0xDEA266
     )
     
     # ⚠️ СЮДА ВСТАВИТЬ ССЫЛКУ НА КАРТИНКУ
-    image_url = "https://media.discordapp.net/attachments/36363636363/navigation_banner.png" 
+    image_url = "https://media.discordapp.net/attachments/1103698978811412600/1471055017254453279/Frame_24.jpg" 
     # embed.set_image(url=image_url) # <--- РАСКОММЕНТИРОВАТЬ ЭТУ СТРОКУ, КОГДА БУДЕТ ССЫЛКА
 
     await interaction.response.send_message(embed=embed, view=NavigationView())
@@ -166,7 +166,7 @@ async def kick(interaction: discord.Interaction, member: discord.Member, reason:
     try:
         await member.kick(reason=reason)
         # Красивый ответ
-        embed = discord.Embed(title="🔨 Пользователь выгнан", color=0xF1C40F)
+        embed = discord.Embed(title="🔨 Пользователь выгнан", color=0xDEA266)
         embed.add_field(name="Пользователь", value=f"{member.mention}", inline=True)
         embed.add_field(name="Модератор", value=f"{interaction.user.mention}", inline=True)
         embed.add_field(name="Причина", value=f"{reason}", inline=False)
@@ -185,7 +185,7 @@ async def ban(interaction: discord.Interaction, member: discord.Member, reason: 
 
     try:
         await member.ban(reason=reason)
-        embed = discord.Embed(title="⛔ Пользователь забанен", color=0xE74C3C)
+        embed = discord.Embed(title="⛔ Пользователь забанен", color=0xDEA266)
         embed.add_field(name="Пользователь", value=f"{member.mention}", inline=True)
         embed.add_field(name="Модератор", value=f"{interaction.user.mention}", inline=True)
         embed.add_field(name="Причина", value=f"{reason}", inline=False)
@@ -219,7 +219,7 @@ async def mute(interaction: discord.Interaction, member: discord.Member, minutes
     duration = datetime.timedelta(minutes=minutes)
     try:
         await member.timeout(duration, reason=reason)
-        embed = discord.Embed(title="🔇 Пользователь отправлен в тайм-аут", color=0x95A5A6)
+        embed = discord.Embed(title="🔇 Пользователь отправлен в тайм-аут", color=0xDEA266)
         embed.add_field(name="Пользователь", value=f"{member.mention}", inline=True)
         embed.add_field(name="Время", value=f"{minutes} мин.", inline=True)
         embed.add_field(name="Причина", value=f"{reason}", inline=False)
