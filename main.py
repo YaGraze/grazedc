@@ -104,7 +104,24 @@ class NavigationSelect(discord.ui.Select):
             view.add_item(discord.ui.Button(label="🎵 Перейти в Music", url="https://ptb.discord.com/channels/618407303699496982/1092366005432496182"))
 
         elif choice == "roles":
-            content = "**🎭 Роли сервера:**\nБазовая роль - Mate/Dude;\nИгровая роль: по играм, в которые ты играешь."
+            content = (
+                "**🎭 Описание ролей сервера Mates:**\n\n"
+                "**👑 Администрация:**\n"
+                "• **Owner** — Создатель сервера.\n"
+                "• **Helpmate** — Модераторы, следящие за порядком.\n\n"
+                
+                "**👥 Участники:**\n"
+                "• **Mates** — Основная роль активных игроков (выдается по умолчанию).\n"
+                "• **Dudes** — Роль для тех, кто зашел просто пообщаться и не играет.\n\n"
+                
+                "**🏆 Киберспортивные команды:**\n"
+                "• **Mortelles-v.1** — Команда сервера по CS2.\n"
+                "• **Mortelles-v.2** — Команда сервера по Valorant.\n\n"
+                
+                "**🎮 Игровые роли:**\n"
+                "Выбираются при входе. Показывают, во что ты играешь:\n"
+                "CS2, Dota 2, Valorant, Apex, Fortnite, OW2, The Finals, PUBG, RL, Destiny 2 и другие."
+            )
             
         elif choice == "commands":
             content = "**💻 Команды навигации:**\n`/navigation` - Вызвать это меню."
@@ -246,6 +263,64 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         # Для отладки можно выводить ошибку в консоль
         print(f"Ошибка команды: {error}")
         await interaction.response.send_message("Произошла ошибка при выполнении команды.", ephemeral=True)
+
+# ------------------------------------------------------------------------------
+# РАЗДЕЛ 3: АВТО-МОДЕРАЦИЯ (AutoMod)
+# ------------------------------------------------------------------------------
+
+# Переменная для хранения истории сообщений (для анти-спама)
+spam_tracking = defaultdict(list)
+
+@bot.event
+async def on_message(message):
+    # Не проверяем сообщения от самого бота
+    if message.author.bot:
+        return
+
+    # Не проверяем сообщения от Администраторов (им можно все)
+    if message.author.guild_permissions.administrator:
+        return # Просто выходим из функции, если это админ
+
+    msg_content = message.content.lower()
+
+    # --- 2. АНТИ-ССЫЛКИ (Discord Invites) ---
+    # Ищем ссылки вида discord.gg/ или discord.com/invite/
+    if re.search(r"(?:https?://)?(?:www\.)?(?:discord\.(?:gg|io|me|li)|discord(?:app)?\.com/invite)/.+", msg_content):
+        try:
+            await message.delete()
+            await message.channel.send(f"{message.author.mention}, реклама сторонних серверов запрещена! 🚫", delete_after=5)
+        except discord.Forbidden:
+            pass
+        return
+
+    # --- 3. АНТИ-СПАМ ---
+    user_id = message.author.id
+    now = datetime.datetime.now()
+    
+    # Добавляем время текущего сообщения в список пользователя
+    spam_tracking[user_id].append(now)
+    
+    # Очищаем старые записи (удаляем те, что были раньше чем SPAM_TIME секунд назад)
+    spam_tracking[user_id] = [t for t in spam_tracking[user_id] if (now - t).total_seconds() < SPAM_TIME]
+    
+    # Если количество сообщений за последние секунды превысило лимит
+    if len(spam_tracking[user_id]) > SPAM_LIMIT:
+        # Очищаем историю спама, чтобы не замутить повторно мгновенно
+        spam_tracking[user_id] = []
+        
+        try:
+            # Даем мут
+            duration = datetime.timedelta(minutes=MUTE_MINUTES)
+            await message.author.timeout(duration, reason="AutoMod: Спам")
+            
+            # Удаляем спам-сообщения (необязательно, но полезно)
+            # (Это удалит последние сообщения от пользователя в этом канале)
+            await message.channel.purge(limit=SPAM_LIMIT, check=lambda m: m.author.id == user_id)
+            
+            embed = discord.Embed(title="🛡️ AutoMod", description=f"{message.author.mention} получил мут на {MUTE_MINUTES} мин. за спам.", color=0xDEA266)
+            await message.channel.send(embed=embed)
+        except discord.Forbidden:
+            print(f"Не удалось замутить спамера {message.author}")
 
 # ------------------------------------------------------------------------------
 # ЗАПУСК
