@@ -6,12 +6,57 @@ import os
 import datetime
 import re 
 import random 
-import asyncio # Нужен для асинхронных задач
-import yt_dlp # Библиотека для YouTube
+import asyncio 
+import yt_dlp
+import tarfile       # Для распаковки
+import urllib.request # Для скачивания
+import shutil         # Для перемещения файлов
 from collections import defaultdict
 from discord.ext import commands
 from discord import app_commands
 from dotenv import load_dotenv
+
+# ------------------------------------------------------------------------------
+# БЛОК АВТО-УСТАНОВКИ FFMPEG
+# ------------------------------------------------------------------------------
+def install_ffmpeg():
+    if os.path.exists("./ffmpeg"):
+        return # Уже установлен
+
+    print("------------------------------------------------")
+    print("⏳ FFmpeg не найден. Начинаю автоматическую загрузку...")
+    print("⚠️ Это займет около 1 минуты. Не выключайте сервер!")
+    
+    url = "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+    filename = "ffmpeg.tar.xz"
+
+    try:
+        # 1. Скачивание
+        urllib.request.urlretrieve(url, filename)
+        print("✅ Архив скачан. Распаковка...")
+
+        # 2. Распаковка
+        with tarfile.open(filename) as f:
+            f.extractall(".")
+        
+        # 3. Поиск файла внутри папок и перемещение в корень
+        extracted_folder = [name for name in os.listdir(".") if name.startswith("ffmpeg-") and os.path.isdir(name)][0]
+        shutil.move(f"{extracted_folder}/ffmpeg", "./ffmpeg")
+        
+        # 4. Выдача прав на запуск
+        os.chmod("./ffmpeg", 0o755)
+        
+        # 5. Очистка мусора
+        os.remove(filename)
+        shutil.rmtree(extracted_folder)
+        
+        print("🎉 FFmpeg успешно установлен и готов к работе!")
+    except Exception as e:
+        print(f"❌ Ошибка установки FFmpeg: {e}")
+        print("Попробуйте перезапустить сервер.")
+
+# ЗАПУСК УСТАНОВКИ ПЕРЕД ВСЕМ ОСТАЛЬНЫМ
+install_ffmpeg()
 
 # ------------------------------------------------------------------------------
 # КОНФИГУРАЦИЯ И ЗАПУСК
@@ -26,7 +71,6 @@ SPAM_TIME = 5
 MUTE_MINUTES = 5 
 LOFI_STREAM_URL = "http://stream.zeno.fm/0r0xa854rp8uv"
 
-# Настройки для YouTube (yt-dlp)
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -36,14 +80,15 @@ YTDL_OPTIONS = {
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0' # Использовать IPv4
+    'source_address': '0.0.0.0'
 }
 
-# Настройки FFmpeg
+# Используем скачанный файл ./ffmpeg
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn'
 }
+
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 # Основной класс бота
