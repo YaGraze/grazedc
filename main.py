@@ -136,8 +136,8 @@ async def navigation(interaction: discord.Interaction):
     )
     
     # ⚠️ СЮДА ВСТАВИТЬ ССЫЛКУ НА КАРТИНКУ
-    image_url = "https://media.discordapp.net/attachments/1103698978811412600/1471055017254453279/Frame_24.jpg" 
-    # embed.set_image(url=image_url) # <--- РАСКОММЕНТИРОВАТЬ ЭТУ СТРОКУ, КОГДА БУДЕТ ССЫЛКА
+    image_url = "https://media.discordapp.net/attachments/1103698978811412600/1471055017254453279/Frame_24.jpg?ex=698d8a3e&is=698c38be&hm=882bf70b7fb343e5e3925daa4e9a1a7f2ae6c6630bb4e5e983db73aa66858d76&=&format=webp&width=1264&height=351" 
+    embed.set_image(url=image_url) # <--- РАСКОММЕНТИРОВАТЬ ЭТУ СТРОКУ, КОГДА БУДЕТ ССЫЛКА
 
     await interaction.response.send_message(embed=embed, view=NavigationView())
 
