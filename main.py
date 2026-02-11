@@ -17,72 +17,78 @@ from discord import app_commands
 from dotenv import load_dotenv
 
 # ------------------------------------------------------------------------------
-# БЛОК АВТО-УСТАНОВКИ FFMPEG (УМНАЯ ВЕРСИЯ)
+# УМНЫЙ ПОИСК FFMPEG (ABSOLUTE PATH VERSION)
 # ------------------------------------------------------------------------------
-FFMPEG_PATH = "ffmpeg" # По умолчанию пробуем системный
+# Глобальная переменная для хранения пути
+FFMPEG_BINARY = "ffmpeg" 
 
-def install_ffmpeg():
-    global FFMPEG_PATH
+def setup_ffmpeg():
+    global FFMPEG_BINARY
     
-    # 1. Проверяем, есть ли уже локальный файл
+    print("------------------------------------------------")
+    print("🔍 Начинаю настройку FFmpeg...")
+
+    # 1. Проверяем, может он уже есть в корне?
     if os.path.isfile("./ffmpeg"):
-        print("✅ Найден локальный FFmpeg.")
-        FFMPEG_PATH = "./ffmpeg"
+        print("✅ Найден локальный ./ffmpeg")
+        os.chmod("./ffmpeg", 0o755)
+        FFMPEG_BINARY = os.path.abspath("./ffmpeg")
         return
 
-    print("------------------------------------------------")
-    print("⏳ FFmpeg не найден. Начинаю загрузку...")
-    
+    # 2. Если нет, ищем во всех подпапках (вдруг уже скачан, но не перемещен)
+    found = False
+    for root, dirs, files in os.walk("."):
+        if "ffmpeg" in files:
+            full_path = os.path.join(root, "ffmpeg")
+            # Проверяем, что это файл, а не папка
+            if os.path.isfile(full_path):
+                print(f"✅ FFmpeg найден в папке: {full_path}")
+                try:
+                    os.chmod(full_path, 0o755) # Даем права на запуск
+                    FFMPEG_BINARY = os.path.abspath(full_path) # Берем АБСОЛЮТНЫЙ путь
+                    found = True
+                    break
+                except Exception as e:
+                    print(f"⚠️ Нашел файл, но не смог дать права: {e}")
+
+    if found:
+        return
+
+    # 3. Если вообще нигде нет - скачиваем
+    print("⏳ Файл не найден нигде. Скачиваю заново...")
     url = "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
     filename = "ffmpeg.tar.xz"
 
     try:
-        # Скачиваем
         urllib.request.urlretrieve(url, filename)
-        print("✅ Архив скачан. Распаковка...")
-
-        # Распаковываем
+        print("📦 Архив скачан. Распаковываю...")
+        
         with tarfile.open(filename) as f:
             f.extractall(".")
+            
+        print("📂 Распаковка завершена. Ищу исполняемый файл...")
         
-        # Ищем файл ffmpeg во всех папках (рекурсивно)
-        found_path = None
+        # Снова ищем после распаковки
         for root, dirs, files in os.walk("."):
             if "ffmpeg" in files:
                 full_path = os.path.join(root, "ffmpeg")
-                # Проверяем, что это не папка и не архив
-                if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
-                    continue # Если уже исполняемый, берем
-                
-                # Перемещаем в корень
-                try:
-                    shutil.move(full_path, "./ffmpeg")
-                    found_path = "./ffmpeg"
-                    break
-                except Exception:
-                    pass
-        
-        # Чистим мусор
-        if os.path.exists(filename):
-            os.remove(filename)
-        
-        # Удаляем папки, оставшиеся от распаковки (начинаются на ffmpeg-)
-        for item in os.listdir("."):
-            if os.path.isdir(item) and item.startswith("ffmpeg-") and item != "ffmpeg":
-                shutil.rmtree(item)
-
-        if found_path:
-            os.chmod("./ffmpeg", 0o755) # Даем права
-            FFMPEG_PATH = "./ffmpeg"
-            print("🎉 FFmpeg успешно установлен в ./ffmpeg")
-        else:
-            print("⚠️ Не удалось переместить FFmpeg, попробуем использовать системный.")
+                if os.path.isfile(full_path):
+                    os.chmod(full_path, 0o755)
+                    FFMPEG_BINARY = os.path.abspath(full_path)
+                    print(f"🎉 Успех! Используем FFmpeg по пути: {FFMPEG_BINARY}")
+                    
+                    # Убираем архив, чтобы место не занимал
+                    if os.path.exists(filename):
+                        os.remove(filename)
+                    return
 
     except Exception as e:
-        print(f"❌ Ошибка установки FFmpeg: {e}")
+        print(f"❌ Критическая ошибка установки FFmpeg: {e}")
+        print("Попробуем использовать системный 'ffmpeg' (если установлен хостом).")
+        FFMPEG_BINARY = "ffmpeg"
 
-# ЗАПУСКАЕМ УСТАНОВКУ
-install_ffmpeg()
+# ЗАПУСКАЕМ НАСТРОЙКУ
+setup_ffmpeg()
 
 # ------------------------------------------------------------------------------
 # КОНФИГУРАЦИЯ И ЗАПУСК
