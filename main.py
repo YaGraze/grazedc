@@ -265,7 +265,48 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         await interaction.response.send_message("Произошла ошибка при выполнении команды.", ephemeral=True)
 
 # ------------------------------------------------------------------------------
-# РАЗДЕЛ 3: АВТО-МОДЕРАЦИЯ (AutoMod)
+# РАЗДЕЛ 3: РАЗВЛЕЧЕНИЯ (FUN)
+# ------------------------------------------------------------------------------
+
+# КОМАНДА GAYRATE
+@bot.tree.command(name="gayrate", description="Узнать процент гейства")
+@app_commands.describe(member="Чей процент проверить? (Пусто = твой)")
+async def gayrate(interaction: discord.Interaction, member: discord.Member = None):
+    # Если member не указан, берем того, кто вызвал команду
+    target = member or interaction.user
+    
+    # Генерируем случайное число от 0 до 100
+    percent = random.randint(0, 100)
+    
+    # Красивый Embed
+    embed = discord.Embed(title="🏳️‍🌈 Gay Rate Machine", color=0xDEA266)
+    embed.description = f"{target.mention} гей на **{percent}%**"
+    
+    # Если процент высокий, добавляем забавную картинку (опционально)
+    if percent > 90:
+        embed.set_footer(text="Ого, мощно! 💅")
+    elif percent < 10:
+        embed.set_footer(text="Подозрительно мало... 🤔")
+
+    await interaction.response.send_message(embed=embed)
+
+# КОМАНДА FLIP (МОНЕТКА)
+@bot.tree.command(name="flip", description="Подбросить монетку")
+async def flip(interaction: discord.Interaction):
+    result = random.choice(["🦅 Орёл", "🪙 Решка"])
+    
+    embed = discord.Embed(title="Подбрасываем монетку...", color=0xDEA266)
+    embed.add_field(name="Результат", value=f"**{result}**")
+    
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ У вас недостаточно прав.", ephemeral=True)
+
+# ------------------------------------------------------------------------------
+# РАЗДЕЛ 4: АВТО-МОДЕРАЦИЯ (AutoMod)
 # ------------------------------------------------------------------------------
 
 # Переменная для хранения истории сообщений (для анти-спама)
