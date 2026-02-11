@@ -4,6 +4,11 @@
 import discord
 import os
 import datetime
+import re 
+import random 
+import asyncio # Нужен для асинхронных задач
+import yt_dlp # Библиотека для YouTube
+from collections import defaultdict
 from discord.ext import commands
 from discord import app_commands
 from dotenv import load_dotenv
@@ -15,6 +20,31 @@ from dotenv import load_dotenv
 # Загрузка переменных окружения
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
+
+SPAM_LIMIT = 5       
+SPAM_TIME = 5        
+MUTE_MINUTES = 5 
+LOFI_STREAM_URL = "http://stream.zeno.fm/0r0xa854rp8uv"
+
+# Настройки для YouTube (yt-dlp)
+YTDL_OPTIONS = {
+    'format': 'bestaudio/best',
+    'noplaylist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'auto',
+    'source_address': '0.0.0.0' # Использовать IPv4
+}
+
+# Настройки FFmpeg
+FFMPEG_OPTIONS = {
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'options': '-vn'
+}
+ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 # Основной класс бота
 class MyBot(commands.Bot):
@@ -38,6 +68,27 @@ class MyBot(commands.Bot):
 
 # Инициализация бота
 bot = MyBot()
+
+# Вспомогательная функция для получения ссылки на аудио
+class YTDLSource(discord.PCMVolumeTransformer):
+    def __init__(self, source, *, data, volume=0.5):
+        super().__init__(source, volume)
+        self.data = data
+        self.title = data.get('title')
+        self.url = data.get('url')
+
+    @classmethod
+    async def from_url(cls, url, *, loop=None, stream=False):
+        loop = loop or asyncio.get_event_loop()
+        # Запускаем в отдельном потоке, чтобы бот не завис
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+
+        if 'entries' in data:
+            # Если это плейлист или поиск, берем первый результат
+            data = data['entries'][0]
+
+        filename = data['url'] if stream else ytdl.prepare_filename(data)
+        return cls(discord.FFmpegPCMAudio(filename, **FFMPEG_OPTIONS), data=data)
 
 # ------------------------------------------------------------------------------
 # РАЗДЕЛ 1: СИСТЕМА НАВИГАЦИИ (Меню и Кнопки)
@@ -362,6 +413,97 @@ async def on_message(message):
             await message.channel.send(embed=embed)
         except discord.Forbidden:
             print(f"Не удалось замутить спамера {message.author}")
+
+# ------------------------------------------------------------------------------
+# РАЗДЕЛ 5: МУЗЫКА (YOUTUBE + LOFI)
+# ------------------------------------------------------------------------------
+
+@bot.tree.command(name="play", description="Играть музыку с YouTube")
+@app_commands.describe(query="Ссылка или название песни")
+async def play(interaction: discord.Interaction, query: str):
+    if not interaction.user.voice:
+        await interaction.response.send_message("❌ Вы должны быть в голосовом канале!", ephemeral=True)
+        return
+
+    await interaction.response.defer() # Ждем загрузку
+
+    channel = interaction.user.voice.channel
+    voice_client = interaction.guild.voice_client
+
+    if voice_client and voice_client.is_connected():
+        await voice_client.move_to(channel)
+    else:
+        voice_client = await channel.connect()
+
+    # Callback функция для отключения после окончания песни
+    def after_playing(error):
+        if error:
+            print(f"Ошибка воспроизведения: {error}")
+        # Создаем задачу для отключения бота
+        coro = voice_client.disconnect()
+        fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
+        try:
+            fut.result()
+        except:
+            pass
+
+    try:
+        # Скачиваем/получаем ссылку
+        player = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
+        
+        if voice_client.is_playing():
+            voice_client.stop()
+            
+        # Запускаем воспроизведение
+        voice_client.play(player, after=after_playing)
+        
+        embed = discord.Embed(title="🎶 Сейчас играет", description=f"[{player.title}]({player.url})", color=0xDEA266)
+        await interaction.followup.send(embed=embed)
+        
+    except Exception as e:
+        await interaction.followup.send(f"⚠️ Не удалось загрузить трек. Возможно, YouTube заблокировал IP хостинга.\nОшибка: {e}")
+
+@bot.tree.command(name="lofi", description="Включить Lofi радио 24/7")
+async def lofi(interaction: discord.Interaction):
+    if not interaction.user.voice:
+        await interaction.response.send_message("❌ Вы должны быть в голосовом канале!", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+    
+    channel = interaction.user.voice.channel
+    voice_client = interaction.guild.voice_client
+
+    if voice_client and voice_client.is_connected():
+        await voice_client.move_to(channel)
+    else:
+        voice_client = await channel.connect()
+
+    if voice_client.is_playing():
+        voice_client.stop()
+
+    # Ссылка на Lofi (можно менять)
+    url = "http://stream.zeno.fm/0r0xa854rp8uv"
+
+    try:
+        voice_client.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS))
+        
+        embed = discord.Embed(title="☕ Lofi Radio", description="Включена бесконечная Lofi волна.", color=0xDEA266)
+        embed.set_footer(text="Для выключения используйте /stop")
+        await interaction.followup.send(embed=embed)
+    except Exception as e:
+        await interaction.followup.send(f"Ошибка: {e}")
+
+@bot.tree.command(name="stop", description="Остановить музыку и выйти")
+async def stop(interaction: discord.Interaction):
+    voice_client = interaction.guild.voice_client
+
+    if voice_client and voice_client.is_connected():
+        voice_client.stop()
+        await voice_client.disconnect()
+        await interaction.response.send_message("👋 Бот отключился.")
+    else:
+        await interaction.response.send_message("❌ Бот не в канале.", ephemeral=True)
 
 # ------------------------------------------------------------------------------
 # ЗАПУСК
