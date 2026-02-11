@@ -88,7 +88,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = data['entries'][0]
 
         filename = data['url'] if stream else ytdl.prepare_filename(data)
-        return cls(discord.FFmpegPCMAudio(filename, **FFMPEG_OPTIONS), data=data)
+        return cls(discord.FFmpegPCMAudio(filename, executable='./ffmpeg', **FFMPEG_OPTIONS), data=data)
 
 # ------------------------------------------------------------------------------
 # РАЗДЕЛ 1: СИСТЕМА НАВИГАЦИИ (Меню и Кнопки)
@@ -414,96 +414,77 @@ async def on_message(message):
         except discord.Forbidden:
             print(f"Не удалось замутить спамера {message.author}")
 
-# ------------------------------------------------------------------------------
-# РАЗДЕЛ 5: МУЗЫКА (YOUTUBE + LOFI)
-# ------------------------------------------------------------------------------
+#МУЗЫКА
 
-@bot.tree.command(name="play", description="Играть музыку с YouTube")
-@app_commands.describe(query="Ссылка или название песни")
+@bot.tree.command(name="play", description="Играть с YouTube")
+@app_commands.describe(query="Название или ссылка")
 async def play(interaction: discord.Interaction, query: str):
     if not interaction.user.voice:
-        await interaction.response.send_message("❌ Вы должны быть в голосовом канале!", ephemeral=True)
-        return
-
-    await interaction.response.defer() # Ждем загрузку
-
-    channel = interaction.user.voice.channel
-    voice_client = interaction.guild.voice_client
-
-    if voice_client and voice_client.is_connected():
-        await voice_client.move_to(channel)
-    else:
-        voice_client = await channel.connect()
-
-    # Callback функция для отключения после окончания песни
-    def after_playing(error):
-        if error:
-            print(f"Ошибка воспроизведения: {error}")
-        # Создаем задачу для отключения бота
-        coro = voice_client.disconnect()
-        fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
-        try:
-            fut.result()
-        except:
-            pass
-
-    try:
-        # Скачиваем/получаем ссылку
-        player = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
-        
-        if voice_client.is_playing():
-            voice_client.stop()
-            
-        # Запускаем воспроизведение
-        voice_client.play(player, after=after_playing)
-        
-        embed = discord.Embed(title="🎶 Сейчас играет", description=f"[{player.title}]({player.url})", color=0xDEA266)
-        await interaction.followup.send(embed=embed)
-        
-    except Exception as e:
-        await interaction.followup.send(f"⚠️ Не удалось загрузить трек. Возможно, YouTube заблокировал IP хостинга.\nОшибка: {e}")
-
-@bot.tree.command(name="lofi", description="Включить Lofi радио 24/7")
-async def lofi(interaction: discord.Interaction):
-    if not interaction.user.voice:
-        await interaction.response.send_message("❌ Вы должны быть в голосовом канале!", ephemeral=True)
-        return
+        return await interaction.response.send_message("❌ Зайди в канал!", ephemeral=True)
 
     await interaction.response.defer()
-    
+
     channel = interaction.user.voice.channel
-    voice_client = interaction.guild.voice_client
+    voice = interaction.guild.voice_client
 
-    if voice_client and voice_client.is_connected():
-        await voice_client.move_to(channel)
-    else:
-        voice_client = await channel.connect()
+    if voice and voice.is_connected(): await voice.move_to(channel)
+    else: voice = await channel.connect()
 
-    if voice_client.is_playing():
-        voice_client.stop()
-
-    # Ссылка на Lofi (можно менять)
-    url = "http://stream.zeno.fm/0r0xa854rp8uv"
+    def after_playing(error):
+        coro = voice.disconnect()
+        fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
+        try: fut.result()
+        except: pass
 
     try:
-        voice_client.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS))
+        player = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
+        if voice.is_playing(): voice.stop()
         
-        embed = discord.Embed(title="☕ Lofi Radio", description="Включена бесконечная Lofi волна.", color=0xDEA266)
-        embed.set_footer(text="Для выключения используйте /stop")
+        # Запускаем воспроизведение через загруженный локально ffmpeg
+        voice.play(player, after=after_playing)
+        
+        embed = discord.Embed(title="🎶 Играет", description=f"[{player.title}]({player.url})", color=0xDEA266)
         await interaction.followup.send(embed=embed)
     except Exception as e:
         await interaction.followup.send(f"Ошибка: {e}")
 
-@bot.tree.command(name="stop", description="Остановить музыку и выйти")
-async def stop(interaction: discord.Interaction):
-    voice_client = interaction.guild.voice_client
+@bot.tree.command(name="lofi", description="Lofi радио")
+async def lofi(interaction: discord.Interaction):
+    if not interaction.user.voice:
+        return await interaction.response.send_message("❌ Зайди в канал!", ephemeral=True)
 
-    if voice_client and voice_client.is_connected():
-        voice_client.stop()
-        await voice_client.disconnect()
-        await interaction.response.send_message("👋 Бот отключился.")
+    await interaction.response.defer()
+    
+    channel = interaction.user.voice.channel
+    voice = interaction.guild.voice_client
+
+    if voice and voice.is_connected(): await voice.move_to(channel)
+    else: voice = await channel.connect()
+
+    if voice.is_playing(): voice.stop()
+
+    try:
+        # Используем загруженный ffmpeg и здесь
+        voice.play(discord.FFmpegPCMAudio("http://stream.zeno.fm/0r0xa854rp8uv", executable='./ffmpeg', **FFMPEG_OPTIONS))
+        embed = discord.Embed(title="☕ Lofi Radio", description="Эфир запущен.", color=0xDEA266)
+        await interaction.followup.send(embed=embed)
+    except Exception as e:
+        await interaction.followup.send(f"Ошибка: {e}")
+
+@bot.tree.command(name="stop", description="Стоп")
+async def stop(interaction: discord.Interaction):
+    voice = interaction.guild.voice_client
+    if voice and voice.is_connected():
+        voice.stop()
+        await voice.disconnect()
+        await interaction.response.send_message("👋 Стоп.")
     else:
         await interaction.response.send_message("❌ Бот не в канале.", ephemeral=True)
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ Нет прав.", ephemeral=True)
 
 # ------------------------------------------------------------------------------
 # ЗАПУСК
